@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"time"
+
+	"github.com/gafkonian-go/internal/config"
 )
 
 func CloseResource(r io.Closer) {
@@ -48,8 +50,8 @@ func ParseHeader(msgSize int32, data []byte) (*RequestHeader, error) {
 	return header, nil
 }
 
-func handleConnection(conn net.Conn) {
-	if err := conn.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
+func handleConnection(conn net.Conn, cfg *config.Config) {
+	if err := conn.SetDeadline(time.Now().Add(time.Duration(cfg.TimeoutSeconds) * time.Second)); err != nil {
 		fmt.Println("Error while setting the deadline:", err.Error())
 		return
 	}
@@ -86,12 +88,18 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
-	l, err := net.Listen("tcp", "0.0.0.0:9092")
+	cfg, err := config.Load()
 	if err != nil {
-		fmt.Println("Failed to bind to port 9092")
+		fmt.Println("Failed to initialize config: ", err.Error())
+		return
+	}
+	address := fmt.Sprintf("%v:%v", "0.0.0.0", cfg.Port)
+	l, err := net.Listen("tcp", address)
+	if err != nil {
+		fmt.Printf("Failed to bind to port :%v. Error: %v", cfg.Port, err.Error())
 		os.Exit(1)
 	}
-	fmt.Println("Server starting on :9092...")
+	fmt.Printf("Server starting on :%v...", cfg.Port)
 	defer CloseResource(l)
 	for {
 		conn, err := l.Accept()
@@ -99,6 +107,6 @@ func main() {
 			fmt.Println("Error accepting connection:", err.Error())
 			continue
 		}
-		go handleConnection(conn)
+		go handleConnection(conn, cfg)
 	}
 }
