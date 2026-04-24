@@ -18,31 +18,29 @@ func CloseResource(r io.Closer) {
 }
 
 type RequestHeader struct {
-	MessageSize       int32
-	RequestAPIKey     int16
-	RequestAPIVersion int16
-	CorrelationID     int32
+	RequestAPIKey     uint16
+	RequestAPIVersion uint16
+	CorrelationID     uint32
 }
 
 func (h *RequestHeader) Validate() error {
 	if h.RequestAPIKey != 18 {
 		return fmt.Errorf("unsupported API key %v", h.RequestAPIKey)
 	}
-	if h.RequestAPIVersion < 0 || h.RequestAPIVersion > 4 {
+	if h.RequestAPIVersion > 4 {
 		return fmt.Errorf("unsupported API version %v", h.RequestAPIVersion)
 	}
 	return nil
 }
 
-func ParseHeader(msgSize int32, data []byte) (*RequestHeader, error) {
+func ParseHeader(data []byte) (*RequestHeader, error) {
 	if len(data) < 8 {
 		return nil, fmt.Errorf("insufficient data for header: %v < 8", len(data))
 	}
 	header := &RequestHeader{
-		MessageSize:       msgSize,
-		RequestAPIKey:     int16(binary.BigEndian.Uint16(data[0:2])),
-		RequestAPIVersion: int16(binary.BigEndian.Uint16(data[2:4])),
-		CorrelationID:     int32(binary.BigEndian.Uint32(data[4:8])),
+		RequestAPIKey:     binary.BigEndian.Uint16(data[0:2]),
+		RequestAPIVersion: binary.BigEndian.Uint16(data[2:4]),
+		CorrelationID:     binary.BigEndian.Uint32(data[4:8]),
 	}
 	if err := header.Validate(); err != nil {
 		return nil, err
@@ -69,14 +67,14 @@ func handleConnection(conn net.Conn, cfg *config.Config) {
 			fmt.Println("Error reading payload:", err.Error())
 			return
 		}
-		header, err := ParseHeader(int32(msgSize), payload)
+		header, err := ParseHeader(payload)
 		if err != nil {
 			fmt.Println("Error parsing header:", err.Error())
 			return
 		}
 		response := make([]byte, 8)
 		binary.BigEndian.PutUint32(response[0:4], 4)
-		binary.BigEndian.PutUint32(response[4:8], uint32(header.CorrelationID))
+		binary.BigEndian.PutUint32(response[4:8], header.CorrelationID)
 		_, err = conn.Write(response)
 		if err != nil {
 			fmt.Println("Error writing a response:", err.Error())
