@@ -1,5 +1,5 @@
-// Package exceptions provides specific error code and messages for the project
-package exceptions
+// Package error provides specific error code and messages for the project
+package error
 
 import "fmt"
 
