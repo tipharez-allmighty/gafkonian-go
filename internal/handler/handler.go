@@ -47,6 +47,9 @@ func HandleConnection(conn net.Conn, cfg *config.Config) {
 			case 18:
 				fmt.Println("Received API version request...")
 				response = getAPIVersionResponse(header.CorrelationID)
+			case 75:
+				fmt.Println("Recieved Describe Topic Partitions request...")
+				response = getTopicPartitionsResponse(header.CorrelationID)
 			}
 		}
 		_, err = conn.Write(response.encode())
