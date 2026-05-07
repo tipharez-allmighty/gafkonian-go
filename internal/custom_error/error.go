@@ -8,6 +8,8 @@ const (
 	UnsupportedAPIVersionError int16 = 35
 	UnsupportedAPIKeyError     int16 = 36
 	InsufficientHeaderError    int16 = 37
+	InsufficientBodyError      int16 = 38
+	EmptyTopicsBodyError       int16 = 39
 )
 
 var ErrorMessages = map[int16]string{
@@ -15,6 +17,8 @@ var ErrorMessages = map[int16]string{
 	UnsupportedAPIVersionError: "unsupported API version %v",
 	UnsupportedAPIKeyError:     "unsupported API key %v",
 	InsufficientHeaderError:    "insufficient data for header: %v < 8",
+	InsufficientBodyError:      "insufficient data for body: %v < 4",
+	EmptyTopicsBodyError:       "there is no topics to describe",
 }
 
 type ProtocolError struct {

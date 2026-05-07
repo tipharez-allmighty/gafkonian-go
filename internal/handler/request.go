@@ -17,6 +17,11 @@ const (
 	topicPartitions uint16 = 75
 )
 
+const (
+	headerSize int = 8
+	bodyOffset int = 23
+)
+
 type apiVersionKey struct {
 	APIKey     uint16
 	MinVersion uint16
@@ -57,7 +62,7 @@ func (h *RequestHeader) Validate() error {
 }
 
 func ParseHeader(data []byte) (*RequestHeader, error) {
-	if len(data) < 8 {
+	if len(data) < headerSize {
 		return nil, customerr.RaiseError(customerr.InsufficientHeaderError, len(data))
 	}
 	header := &RequestHeader{
@@ -69,4 +74,40 @@ func ParseHeader(data []byte) (*RequestHeader, error) {
 		return header, err
 	}
 	return header, nil
+}
+
+type TopicRequest struct {
+	TopicName string
+	TagBuffer uint8
+}
+type DesctibeTopicRequestBody struct {
+	Topics    []TopicRequest
+	TagBuffer uint8
+}
+
+func ParseDescribeTopicBody(data []byte) (*DesctibeTopicRequestBody, error) {
+	body := data[bodyOffset:]
+	if len(body) < 4 {
+		return nil, customerr.RaiseError(customerr.InsufficientBodyError, len(body))
+	}
+	offset := 4
+	arraySize := binary.BigEndian.Uint32(body[0:offset])
+	if (arraySize - 1) < 2 {
+		return nil, customerr.RaiseError(customerr.EmptyTopicsBodyError)
+	}
+	topicReqeusts := make([]TopicRequest, 0, arraySize-1)
+	for range arraySize {
+		topicNameLen := int(binary.BigEndian.Uint16(body[offset : offset+2]))
+		offset += 2
+		topicName := string(body[offset : offset+topicNameLen])
+		topicReqeusts = append(topicReqeusts, TopicRequest{
+			TopicName: topicName,
+			TagBuffer: 0,
+		})
+		offset += topicNameLen
+	}
+	return &DesctibeTopicRequestBody{
+		Topics:    topicReqeusts,
+		TagBuffer: 0,
+	}, nil
 }
