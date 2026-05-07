@@ -12,8 +12,42 @@ type RequestHeader struct {
 	CorrelationID     uint32
 }
 
+const (
+	apiVersion      uint16 = 18
+	topicPartitions uint16 = 75
+)
+
+type apiVersionKey struct {
+	APIKey     uint16
+	MinVersion uint16
+	MaxVersion uint16
+	TagBuffer  uint8
+}
+
+var avaliableAPI = []apiVersionKey{
+	{
+		APIKey:     apiVersion,
+		MinVersion: 0,
+		MaxVersion: 4,
+		TagBuffer:  0,
+	},
+	{
+		APIKey:     topicPartitions,
+		MinVersion: 0,
+		MaxVersion: 4,
+		TagBuffer:  0,
+	},
+}
+var APIKeyMap = make(map[uint16]*apiVersionKey)
+
+func InitAvaliableAPIKeys() {
+	for i := range avaliableAPI {
+		APIKeyMap[avaliableAPI[i].APIKey] = &avaliableAPI[i]
+	}
+}
+
 func (h *RequestHeader) Validate() error {
-	if h.RequestAPIKey != 18 {
+	if _, ok := APIKeyMap[h.RequestAPIKey]; !ok {
 		return customerr.RaiseError(customerr.UnsupportedAPIKeyError, h.RequestAPIKey)
 	}
 	if h.RequestAPIVersion > 4 {

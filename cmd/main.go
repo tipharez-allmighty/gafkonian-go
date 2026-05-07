@@ -16,6 +16,7 @@ func main() {
 		fmt.Println("Failed to initialize config: ", err.Error())
 		return
 	}
+	handler.InitAvaliableAPIKeys()
 	address := fmt.Sprintf("%v:%v", "0.0.0.0", cfg.Port)
 	l, err := net.Listen("tcp", address)
 	if err != nil {

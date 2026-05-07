@@ -39,15 +39,13 @@ func HandleConnection(conn net.Conn, cfg *config.Config) {
 			fmt.Println("Error parsing header:", err.Error())
 			if targetErr, ok := errors.AsType[*customerr.ProtocolError](err); ok {
 				response = getErrorResponse(uint16(targetErr.Code), header.CorrelationID)
-			} else {
-				return
 			}
 		} else {
-			switch APIKey := header.RequestAPIKey; APIKey {
-			case 18:
+			switch apiKey := header.RequestAPIKey; apiKey {
+			case apiVersion:
 				fmt.Println("Received API version request...")
 				response = getAPIVersionResponse(header.CorrelationID)
-			case 75:
+			case topicPartitions:
 				fmt.Println("Recieved Describe Topic Partitions request...")
 				response = getTopicPartitionsResponse(header.CorrelationID)
 			}
