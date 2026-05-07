@@ -7,6 +7,7 @@ import (
 
 	"github.com/gafkonian-go/internal/config"
 	"github.com/gafkonian-go/internal/handler"
+	"github.com/gafkonian-go/internal/metadata"
 	"github.com/gafkonian-go/internal/utils"
 )
 
@@ -17,6 +18,13 @@ func main() {
 		return
 	}
 	handler.InitAvaliableAPIKeys()
+	err = metadata.Load(cfg.MetadataLog)
+	if err != nil {
+		fmt.Printf("Failed to load cluster metadata:%v. Error: %v", cfg.MetadataLog, err.Error())
+		os.Exit(1)
+	}
+	fmt.Println(metadata.ClusterState)
+
 	address := fmt.Sprintf("%v:%v", "0.0.0.0", cfg.Port)
 	l, err := net.Listen("tcp", address)
 	if err != nil {

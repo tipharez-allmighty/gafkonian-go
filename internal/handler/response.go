@@ -2,6 +2,9 @@ package handler
 
 import (
 	"encoding/binary"
+
+	"github.com/gafkonian-go/internal/metadata"
+	"github.com/gafkonian-go/internal/utils"
 )
 
 type baseResponse struct {
@@ -99,16 +102,22 @@ type topicPartitionsResponse struct {
 	TagBufferResponse uint8
 }
 
-type UUID [16]byte
-
 type Topic struct {
 	ErrorCode                 uint16
 	TopicName                 string
-	TopicID                   UUID
+	TopicID                   utils.UUID
 	IsInternal                bool
 	Partitions                []byte
 	TopicAuthorizedOperations uint32
 	TagBuffer                 uint8
+}
+
+type Partition struct {
+	ErrorCode uint16
+	metadata.PartitionMetadata
+	EligibleLeaderReplicas []uint32
+	LastKnownElr           []uint32
+	OfflineReplicas        []uint32
 }
 
 func (t *topicPartitionsResponse) encode() []byte {
@@ -157,7 +166,7 @@ func getTopicPartitionsResponse(correlationID uint32) responseEncoder {
 			{
 				ErrorCode:                 3,
 				TopicName:                 "foo",
-				TopicID:                   UUID{},
+				TopicID:                   utils.UUID{},
 				IsInternal:                false,
 				Partitions:                []byte{},
 				TopicAuthorizedOperations: 0,
