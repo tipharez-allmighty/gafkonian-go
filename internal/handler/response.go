@@ -53,23 +53,18 @@ func (a *apiVersionResponse) encode() []byte {
 
 	buf16 := make([]byte, 2)
 	buf32 := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf32, a.CorrelationID)
-	body = append(body, buf32...)
-	binary.BigEndian.PutUint16(buf16, 0)
-	body = append(body, buf16...)
+	utils.AppendBuf32(&buf32, a.CorrelationID, &body)
+	utils.AppendBuf16(&buf16, 0, &body)
 
 	body = append(body, uint8(len(a.APIKeys)+1))
 	for _, apiKey := range a.APIKeys {
-		binary.BigEndian.PutUint16(buf16, apiKey.APIKey)
-		body = append(body, buf16...)
+		utils.AppendBuf16(&buf16, apiKey.APIKey, &body)
 		binary.BigEndian.PutUint16(buf16, apiKey.MinVersion)
-		body = append(body, buf16...)
-		binary.BigEndian.PutUint16(buf16, apiKey.MaxVersion)
-		body = append(body, buf16...)
+		utils.AppendBuf16(&buf16, apiKey.MinVersion, &body)
+		utils.AppendBuf16(&buf16, apiKey.MaxVersion, &body)
 		body = append(body, apiKey.TagBuffer)
 	}
-	binary.BigEndian.PutUint32(buf32, a.ThrottleTimeMs)
-	body = append(body, buf32...)
+	utils.AppendBuf32(&buf32, a.ThrottleTimeMs, &body)
 	body = append(body, a.TagBuffer)
 	size := uint32(len(body))
 	encodedResponse := make([]byte, 4)
@@ -107,7 +102,7 @@ type Topic struct {
 	TopicName                 string
 	TopicID                   utils.UUID
 	IsInternal                bool
-	Partitions                []byte
+	Partitions                []Partition
 	TopicAuthorizedOperations uint32
 	TagBuffer                 uint8
 }
@@ -124,16 +119,12 @@ func (t *topicPartitionsResponse) encode() []byte {
 	body := make([]byte, 0)
 	buf16 := make([]byte, 2)
 	buf32 := make([]byte, 4)
-	binary.BigEndian.PutUint32(buf32, t.CorrelationID)
-	body = append(body, buf32...)
-	binary.BigEndian.PutUint16(buf16, 0)
-	body = append(body, buf16...)
-	binary.BigEndian.PutUint32(buf32, t.ThrottleTimeMs)
-	body = append(body, buf32...)
+	utils.AppendBuf32(&buf32, t.CorrelationID, &body)
+	utils.AppendBuf16(&buf16, 0, &body)
+	utils.AppendBuf32(&buf32, t.ThrottleTimeMs, &body)
 	body = append(body, uint8(len(t.Topics)+1))
 	for _, topic := range t.Topics {
-		binary.BigEndian.PutUint16(buf16, topic.ErrorCode)
-		body = append(body, buf16...)
+		utils.AppendBuf16(&buf16, topic.ErrorCode, &body)
 		topicNameSize := uint8(len(topic.TopicName) + 1)
 		body = append(body, topicNameSize)
 		body = append(body, topic.TopicName...)
@@ -143,9 +134,39 @@ func (t *topicPartitionsResponse) encode() []byte {
 			isInternal = 1
 		}
 		body = append(body, byte(isInternal))
-		body = append(body, topic.Partitions...)
-		binary.BigEndian.PutUint32(buf32, topic.TopicAuthorizedOperations)
-		body = append(body, buf32...)
+		body = append(body, uint8(len(topic.Partitions)+1))
+		for _, partition := range topic.Partitions {
+			utils.AppendBuf16(&buf16, partition.ErrorCode, &body)
+			utils.AppendBuf32(&buf32, partition.ID, &body)
+			utils.AppendBuf32(&buf32, partition.LeaderID, &body)
+			utils.AppendBuf32(&buf32, partition.LeaderEpoch, &body)
+			utils.AppendBuf32(&buf32, partition.PartitionEpoch, &body)
+			body = append(body, uint8(len(partition.ReplicaNodes)+1))
+			for _, node := range partition.ReplicaNodes {
+				utils.AppendBuf32(&buf32, node, &body)
+			}
+			body = append(body, uint8(len(partition.IsrNodes)+1))
+			for _, node := range partition.IsrNodes {
+				utils.AppendBuf32(&buf32, node, &body)
+			}
+
+			body = append(body, uint8(len(partition.EligibleLeaderReplicas)+1))
+			for _, node := range partition.EligibleLeaderReplicas {
+				utils.AppendBuf32(&buf32, node, &body)
+			}
+
+			body = append(body, uint8(len(partition.LastKnownElr)+1))
+			for _, node := range partition.LastKnownElr {
+				utils.AppendBuf32(&buf32, node, &body)
+			}
+
+			body = append(body, uint8(len(partition.OfflineReplicas)+1))
+			for _, node := range partition.OfflineReplicas {
+				utils.AppendBuf32(&buf32, node, &body)
+			}
+			body = append(body, 0)
+		}
+		utils.AppendBuf32(&buf32, topic.TopicAuthorizedOperations, &body)
 		body = append(body, 0)
 	}
 	body = append(body, byte(t.NextCursor))
@@ -157,22 +178,51 @@ func (t *topicPartitionsResponse) encode() []byte {
 	return encodedResponse
 }
 
-func getTopicPartitionsResponse(correlationID uint32) responseEncoder {
-	response := &topicPartitionsResponse{
-		CorrelationID:   correlationID,
-		TagBufferHeader: 0,
-		ThrottleTimeMs:  0,
-		Topics: []Topic{
-			{
-				ErrorCode:                 3,
-				TopicName:                 "foo",
-				TopicID:                   utils.UUID{},
+func topicNotFoundResponse(topicName string) Topic {
+	return Topic{
+		ErrorCode:                 3,
+		TopicName:                 topicName,
+		TopicID:                   utils.UUID{},
+		IsInternal:                false,
+		Partitions:                []Partition{},
+		TopicAuthorizedOperations: 0,
+		TagBuffer:                 0,
+	}
+}
+
+func getTopicPartitionsResponse(correlationID uint32, body *DescribeTopicRequestBody) responseEncoder {
+	topics := []Topic{}
+	for _, topic := range body.Topics {
+		if topicUUID, ok := metadata.ClusterState.TopicNameIndex[topic.TopicName]; ok {
+			topicData := metadata.ClusterState.Topics[topicUUID]
+			partitions := []Partition{}
+			for _, partitionMetadata := range topicData.Partitions {
+				partitions = append(partitions, Partition{
+					ErrorCode:              0,
+					PartitionMetadata:      partitionMetadata,
+					EligibleLeaderReplicas: []uint32{},
+					LastKnownElr:           []uint32{},
+					OfflineReplicas:        []uint32{},
+				})
+			}
+			topics = append(topics, Topic{
+				ErrorCode:                 0,
+				TopicName:                 topicData.Name,
+				TopicID:                   topicData.UUID,
 				IsInternal:                false,
-				Partitions:                []byte{},
+				Partitions:                partitions,
 				TopicAuthorizedOperations: 0,
 				TagBuffer:                 0,
-			},
-		},
+			})
+		} else {
+			topics = append(topics, topicNotFoundResponse(topic.TopicName))
+		}
+	}
+	response := &topicPartitionsResponse{
+		CorrelationID:     correlationID,
+		TagBufferHeader:   0,
+		ThrottleTimeMs:    0,
+		Topics:            topics,
 		NextCursor:        -1,
 		TagBufferResponse: 0,
 	}

@@ -12,11 +12,13 @@ import (
 const batchSize int = 61
 
 var ClusterState = &ClusterMetadata{
-	Topics: make(map[utils.UUID]*TopicMetadata),
+	Topics:         make(map[utils.UUID]*TopicMetadata),
+	TopicNameIndex: make(map[string]utils.UUID),
 }
 
 type ClusterMetadata struct {
-	Topics map[utils.UUID]*TopicMetadata
+	Topics         map[utils.UUID]*TopicMetadata
+	TopicNameIndex map[string]utils.UUID
 }
 
 type TopicMetadata struct {
@@ -147,6 +149,7 @@ func parseTopicRecord(data []byte, state *ClusterMetadata) {
 			UUID: topicID,
 		}
 	}
+	state.TopicNameIndex[topicName] = topicID
 }
 
 func parsePartitionRecord(data []byte, state *ClusterMetadata) {

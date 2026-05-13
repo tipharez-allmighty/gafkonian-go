@@ -47,7 +47,14 @@ func HandleConnection(conn net.Conn, cfg *config.Config) {
 				response = getAPIVersionResponse(header.CorrelationID)
 			case topicPartitions:
 				fmt.Println("Recieved Describe Topic Partitions request...")
-				response = getTopicPartitionsResponse(header.CorrelationID)
+				body, err := ParseDescribeTopicBody(payload)
+				if err != nil {
+					if targetErr, ok := errors.AsType[*customerr.ProtocolError](err); ok {
+						response = getErrorResponse(uint16(targetErr.Code), header.CorrelationID)
+					}
+				} else {
+					response = getTopicPartitionsResponse(header.CorrelationID, body)
+				}
 			}
 		}
 		_, err = conn.Write(response.encode())

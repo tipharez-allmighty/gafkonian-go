@@ -19,7 +19,7 @@ const (
 
 const (
 	headerSize int = 8
-	bodyOffset int = 23
+	bodyOffset int = 20
 )
 
 type apiVersionKey struct {
@@ -80,34 +80,39 @@ type TopicRequest struct {
 	TopicName string
 	TagBuffer uint8
 }
-type DesctibeTopicRequestBody struct {
+type DescribeTopicRequestBody struct {
 	Topics    []TopicRequest
 	TagBuffer uint8
 }
 
-func ParseDescribeTopicBody(data []byte) (*DesctibeTopicRequestBody, error) {
+func ParseDescribeTopicBody(data []byte) (*DescribeTopicRequestBody, error) {
 	body := data[bodyOffset:]
-	if len(body) < 4 {
-		return nil, customerr.RaiseError(customerr.InsufficientBodyError, len(body))
+
+	arraylength, n := binary.Uvarint(body)
+	if n <= 0 {
+		return nil, customerr.RaiseError(customerr.InsufficientBodyError)
 	}
-	offset := 4
-	arraySize := binary.BigEndian.Uint32(body[0:offset])
-	if (arraySize - 1) < 2 {
+	offset := n
+	arraySize := int(arraylength - 1)
+	if arraySize < 1 {
 		return nil, customerr.RaiseError(customerr.EmptyTopicsBodyError)
 	}
-	topicReqeusts := make([]TopicRequest, 0, arraySize-1)
+	topicRequests := make([]TopicRequest, 0, arraySize)
+
 	for range arraySize {
-		topicNameLen := int(binary.BigEndian.Uint16(body[offset : offset+2]))
-		offset += 2
-		topicName := string(body[offset : offset+topicNameLen])
-		topicReqeusts = append(topicReqeusts, TopicRequest{
+		strLenPlusOne, n := binary.Uvarint(body[offset:])
+		offset += n
+		strLen := int(strLenPlusOne - 1)
+
+		topicName := string(body[offset : offset+strLen])
+		offset += strLen
+		offset++
+
+		topicRequests = append(topicRequests, TopicRequest{
 			TopicName: topicName,
-			TagBuffer: 0,
 		})
-		offset += topicNameLen
 	}
-	return &DesctibeTopicRequestBody{
-		Topics:    topicReqeusts,
-		TagBuffer: 0,
+	return &DescribeTopicRequestBody{
+		Topics: topicRequests,
 	}, nil
 }
