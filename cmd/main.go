@@ -23,7 +23,11 @@ func main() {
 		fmt.Printf("Failed to load cluster metadata:%v. Error: %v", cfg.MetadataLog, err.Error())
 		os.Exit(1)
 	}
-
+	err = metadata.InitPartitionLog(cfg.PartitionLog)
+	if err != nil {
+		fmt.Printf("Failed to inititialize partitions records log:%v. Error: %v", cfg.MetadataLog, err.Error())
+		os.Exit(1)
+	}
 	address := fmt.Sprintf("%v:%v", "0.0.0.0", cfg.Port)
 	l, err := net.Listen("tcp", address)
 	if err != nil {

@@ -15,6 +15,8 @@ type RequestHeader struct {
 const (
 	apiVersion      uint16 = 18
 	topicPartitions uint16 = 75
+	fetch           uint16 = 16
+	produce         uint16 = 0
 )
 
 const (
@@ -40,6 +42,18 @@ var avaliableAPI = []apiVersionKey{
 		APIKey:     topicPartitions,
 		MinVersion: 0,
 		MaxVersion: 4,
+		TagBuffer:  0,
+	},
+	{
+		APIKey:     fetch,
+		MinVersion: 0,
+		MaxVersion: 16,
+		TagBuffer:  0,
+	},
+	{
+		APIKey:     produce,
+		MinVersion: 0,
+		MaxVersion: 11,
 		TagBuffer:  0,
 	},
 }

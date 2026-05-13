@@ -13,6 +13,7 @@ type Config struct {
 	Port           int    `env:"PORT" envDefault:"9092"`
 	TimeoutSeconds int    `env:"TIMEOUTSECONDS" envDefault:"10"`
 	MetadataLog    string `env:"METADATA_LOG" envDefault:"tmp/__cluster_metadata/00000000000000000000.log"`
+	PartitionLog   string `enc:"RECORDS_LOG" envDefault:"tmp/partitions"`
 }
 
 func Load() (*Config, error) {

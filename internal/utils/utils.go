@@ -9,6 +9,16 @@ import (
 
 type UUID [16]byte
 
+func (u UUID) String() string {
+	return fmt.Sprintf("%x-%x-%x-%x-%x",
+		u[:4],
+		u[4:6],
+		u[6:8],
+		u[8:10],
+		u[10:16],
+	)
+}
+
 func CloseResource(r io.Closer) {
 	if err := r.Close(); err != nil {
 		fmt.Println("Error closing resource:", err.Error())
