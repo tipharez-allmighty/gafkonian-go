@@ -133,13 +133,13 @@ func ParseDescribeTopicBody(data []byte) (*DescribeTopicRequestBody, error) {
 	}, nil
 }
 
-type ProduceBody struct {
+type ProduceFetchBody struct {
 	TopicName   string
 	PartitionID uint32
 	Records     []metadata.Record
 }
 
-func ParseProduceBody(data []byte) (*ProduceBody, error) {
+func ParseProduceBody(data []byte) (*ProduceFetchBody, error) {
 	if len(data) < bodyOffset {
 		return nil, customerr.RaiseError(customerr.InsufficientBodyError)
 	}
@@ -160,33 +160,59 @@ func ParseProduceBody(data []byte) (*ProduceBody, error) {
 	records := make([]metadata.Record, 0, recordCount)
 
 	for range recordCount {
-		off := binary.BigEndian.Uint64(body[offset : offset+8])
+		recordOffset := binary.BigEndian.Uint64(body[offset : offset+8])
 		offset += 8
 
-		ts := binary.BigEndian.Uint64(body[offset : offset+8])
+		timestamp := binary.BigEndian.Uint64(body[offset : offset+8])
 		offset += 8
 
-		keyLen := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+		keyLength := int(binary.BigEndian.Uint32(body[offset : offset+4]))
 		offset += 4
-		key := body[offset : offset+keyLen]
-		offset += keyLen
-
-		valLen := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+		key := body[offset : offset+keyLength]
+		offset += keyLength
+		valLength := int(binary.BigEndian.Uint32(body[offset : offset+4]))
 		offset += 4
-		value := body[offset : offset+valLen]
-		offset += valLen
+		value := body[offset : offset+valLength]
+		offset += valLength
 
 		records = append(records, metadata.Record{
-			Offset:    off,
-			Timestamp: ts,
+			Offset:    recordOffset,
+			Timestamp: timestamp,
 			Key:       key,
 			Value:     value,
 		})
 	}
 
-	return &ProduceBody{
+	return &ProduceFetchBody{
 		TopicName:   topicName,
 		PartitionID: partitionID,
 		Records:     records,
+	}, nil
+}
+
+type FetchBodyRequest struct {
+	TopicName   string
+	PartitionID uint32
+	Offset      uint64
+}
+
+func ParseFetchBody(data []byte) (*FetchBodyRequest, error) {
+	if len(data) < bodyOffset {
+		return nil, customerr.RaiseError(customerr.InsufficientBodyError)
+	}
+	body := data[bodyOffset:]
+	offset := 0
+
+	topicLength := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+	offset += 4
+	topicName := string(body[offset : offset+topicLength])
+	offset += topicLength
+	partitionID := binary.BigEndian.Uint32(body[offset : offset+4])
+	offset += 4
+	recordOffset := binary.BigEndian.Uint64(body[offset : offset+8])
+	return &FetchBodyRequest{
+		TopicName:   topicName,
+		PartitionID: partitionID,
+		Offset:      recordOffset,
 	}, nil
 }

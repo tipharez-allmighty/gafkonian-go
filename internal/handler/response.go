@@ -231,7 +231,7 @@ func getTopicPartitionsResponse(correlationID uint32, body *DescribeTopicRequest
 type ProduceResponse struct {
 	CorrelationID   uint32
 	TagBufferHeader uint8
-	ProduceBody
+	ProduceFetchBody
 }
 
 func (p *ProduceResponse) encode() []byte {
@@ -253,7 +253,7 @@ func (p *ProduceResponse) encode() []byte {
 	return fullResponse
 }
 
-func getProduceResponse(correlationID uint32, body *ProduceBody, path string) (responseEncoder, error) {
+func getProduceResponse(correlationID uint32, body *ProduceFetchBody, path string) (responseEncoder, error) {
 	topicUUID, ok := metadata.ClusterState.TopicNameIndex[body.TopicName]
 	if !ok {
 		return nil, customerr.RaiseError(customerr.TopicNotFoundError)
@@ -280,7 +280,39 @@ func getProduceResponse(correlationID uint32, body *ProduceBody, path string) (r
 	response := &ProduceResponse{
 		CorrelationID:   correlationID,
 		TagBufferHeader: 0,
-		ProduceBody: ProduceBody{
+		ProduceFetchBody: ProduceFetchBody{
+			TopicName:   body.TopicName,
+			PartitionID: body.PartitionID,
+			Records:     records,
+		},
+	}
+	return response, nil
+}
+
+func getFetchResponse(correlationID uint32, body *FetchBodyRequest, path string) (responseEncoder, error) {
+	topicUUID, ok := metadata.ClusterState.TopicNameIndex[body.TopicName]
+	if !ok {
+		return nil, customerr.RaiseError(customerr.TopicNotFoundError)
+	}
+	topic := metadata.ClusterState.Topics[topicUUID]
+	var recordPartition *metadata.PartitionMetadata
+	for _, partition := range topic.Partitions {
+		if body.PartitionID == partition.ID {
+			recordPartition = &partition
+			break
+		}
+	}
+	if recordPartition == nil {
+		return nil, customerr.RaiseError(customerr.PartitionNotFoundError)
+	}
+	records, err := metadata.ReadRecords(path, topicUUID.String(), body.TopicName, recordPartition.ID, body.Offset)
+	if err != nil {
+		return nil, customerr.RaiseError(customerr.SystemError, err.Error())
+	}
+	response := &ProduceResponse{
+		CorrelationID:   correlationID,
+		TagBufferHeader: 0,
+		ProduceFetchBody: ProduceFetchBody{
 			TopicName:   body.TopicName,
 			PartitionID: body.PartitionID,
 			Records:     records,

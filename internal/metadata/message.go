@@ -1,7 +1,9 @@
 package metadata
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -69,4 +71,62 @@ func (r Record) Append(path, topicUUID, topicName string, partitionID uint32) (*
 		return nil, fmt.Errorf("failed to append file: %w", err)
 	}
 	return &r, nil
+}
+
+func ReadRecords(path, topicUUID, topicName string, partitionID uint32, offset uint64) ([]Record, error) {
+	logName := fmt.Sprintf("%v-%v/%v.log", topicUUID, topicName, partitionID)
+	logPath := filepath.Join(path, logName)
+	f, err := os.Open(logPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log while reading: %w", err)
+	}
+	defer utils.CloseResource(f)
+
+	newOffset, err := f.Seek(int64(offset), 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to offset: %w", err)
+	}
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the length of the partition log: %w", err)
+	}
+	logLength := info.Size()
+	currentOffset := int(newOffset)
+	var records []Record
+	for currentOffset < int(logLength) {
+		header := make([]byte, 20)
+		n, err := io.ReadFull(f, header)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read record metadata: %w", err)
+		}
+		currentOffset += n
+		record := Record{
+			Offset:    binary.BigEndian.Uint64(header[0:8]),
+			Timestamp: binary.BigEndian.Uint64(header[8:16]),
+		}
+		keyLength := binary.BigEndian.Uint32(header[16:20])
+
+		record.Key = make([]byte, keyLength)
+		n, err = io.ReadFull(f, record.Key)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read key: %w", err)
+		}
+		currentOffset += n
+		valLengthBuf := make([]byte, 4)
+		n, err = io.ReadFull(f, valLengthBuf)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read value length: %w", err)
+		}
+		currentOffset += n
+		valLength := binary.BigEndian.Uint32(valLengthBuf)
+		record.Value = make([]byte, valLength)
+		n, err = io.ReadFull(f, record.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read value: %w", err)
+		}
+		currentOffset += n
+		records = append(records, record)
+	}
+
+	return records, nil
 }
