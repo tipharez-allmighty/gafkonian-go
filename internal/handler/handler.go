@@ -56,14 +56,12 @@ func HandleConnection(conn net.Conn, cfg *config.Config) {
 					response = getTopicPartitionsResponse(header.CorrelationID, body)
 				}
 			case produce:
-				fmt.Println("produce body")
 				body, err := ParseProduceBody(payload)
 				if err != nil {
 					if targetErr, ok := errors.AsType[*customerr.ProtocolError](err); ok {
 						response = getErrorResponse(uint16(targetErr.Code), header.CorrelationID)
 					}
 				} else {
-					fmt.Println(body)
 					response, err = getProduceResponse(header.CorrelationID, body, cfg.PartitionLog)
 					if err != nil {
 						if targetErr, ok := errors.AsType[*customerr.ProtocolError](err); ok {
