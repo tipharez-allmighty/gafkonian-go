@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/binary"
-	"fmt"
 
 	customerr "github.com/gafkonian-go/internal/custom_error"
 	"github.com/gafkonian-go/internal/metadata"
@@ -14,7 +13,6 @@ type baseResponse struct {
 	ErrorCode     uint16
 }
 
-// Error Response hadnling
 type errorResponse struct {
 	baseResponse
 }
@@ -89,7 +87,6 @@ func getAPIVersionResponse(correlationID uint32) responseEncoder {
 	return response
 }
 
-// Topic Version Response handling
 type topicPartitionsResponse struct {
 	CorrelationID     uint32
 	TagBufferHeader   uint8
@@ -289,6 +286,5 @@ func getProduceResponse(correlationID uint32, body *ProduceBody, path string) (r
 			Records:     records,
 		},
 	}
-	fmt.Println(response)
 	return response, nil
 }
