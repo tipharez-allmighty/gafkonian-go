@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 
 	customerr "github.com/gafkonian-go/internal/custom_error"
+	"github.com/gafkonian-go/internal/metadata"
 )
 
 type RequestHeader struct {
@@ -66,10 +67,11 @@ func InitAvaliableAPIKeys() {
 }
 
 func (h *RequestHeader) Validate() error {
-	if _, ok := APIKeyMap[h.RequestAPIKey]; !ok {
+	apiVersionKey, ok := APIKeyMap[h.RequestAPIKey]
+	if !ok {
 		return customerr.RaiseError(customerr.UnsupportedAPIKeyError, h.RequestAPIKey)
 	}
-	if h.RequestAPIVersion > 4 {
+	if h.RequestAPIVersion > apiVersionKey.MaxVersion {
 		return customerr.RaiseError(customerr.UnsupportedAPIVersionError, h.RequestAPIVersion)
 	}
 	return nil
@@ -128,5 +130,63 @@ func ParseDescribeTopicBody(data []byte) (*DescribeTopicRequestBody, error) {
 	}
 	return &DescribeTopicRequestBody{
 		Topics: topicRequests,
+	}, nil
+}
+
+type ProduceBody struct {
+	TopicName   string
+	PartitionID uint32
+	Records     []metadata.Record
+}
+
+func ParseProduceBody(data []byte) (*ProduceBody, error) {
+	if len(data) < bodyOffset {
+		return nil, customerr.RaiseError(customerr.InsufficientBodyError)
+	}
+	body := data[bodyOffset:]
+	offset := 0
+
+	topicLen := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+	offset += 4
+	topicName := string(body[offset : offset+topicLen])
+	offset += topicLen
+
+	partitionID := binary.BigEndian.Uint32(body[offset : offset+4])
+	offset += 4
+
+	recordCount := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+	offset += 4
+
+	records := make([]metadata.Record, 0, recordCount)
+
+	for range recordCount {
+		off := binary.BigEndian.Uint64(body[offset : offset+8])
+		offset += 8
+
+		ts := binary.BigEndian.Uint64(body[offset : offset+8])
+		offset += 8
+
+		keyLen := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+		offset += 4
+		key := body[offset : offset+keyLen]
+		offset += keyLen
+
+		valLen := int(binary.BigEndian.Uint32(body[offset : offset+4]))
+		offset += 4
+		value := body[offset : offset+valLen]
+		offset += valLen
+
+		records = append(records, metadata.Record{
+			Offset:    off,
+			Timestamp: ts,
+			Key:       key,
+			Value:     value,
+		})
+	}
+
+	return &ProduceBody{
+		TopicName:   topicName,
+		PartitionID: partitionID,
+		Records:     records,
 	}, nil
 }

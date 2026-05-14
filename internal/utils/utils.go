@@ -34,3 +34,8 @@ func AppendBuf32(buf *[]byte, value uint32, result *[]byte) {
 	binary.BigEndian.PutUint32(*buf, value)
 	*result = append(*result, *buf...)
 }
+
+func AppendBuf64(buf *[]byte, value uint64, result *[]byte) {
+	binary.BigEndian.PutUint64((*buf), value)
+	*result = append(*result, *buf...)
+}

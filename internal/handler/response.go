@@ -2,7 +2,9 @@ package handler
 
 import (
 	"encoding/binary"
+	"fmt"
 
+	customerr "github.com/gafkonian-go/internal/custom_error"
 	"github.com/gafkonian-go/internal/metadata"
 	"github.com/gafkonian-go/internal/utils"
 )
@@ -227,4 +229,66 @@ func getTopicPartitionsResponse(correlationID uint32, body *DescribeTopicRequest
 		TagBufferResponse: 0,
 	}
 	return response
+}
+
+type ProduceResponse struct {
+	CorrelationID   uint32
+	TagBufferHeader uint8
+	ProduceBody
+}
+
+func (p *ProduceResponse) encode() []byte {
+	body := make([]byte, 0)
+	buf32 := make([]byte, 4)
+	utils.AppendBuf32(&buf32, p.CorrelationID, &body)
+	utils.AppendBuf32(&buf32, uint32(len(p.TopicName)), &body)
+	body = append(body, p.TopicName...)
+	utils.AppendBuf32(&buf32, p.PartitionID, &body)
+	utils.AppendBuf32(&buf32, uint32(len(p.Records)), &body)
+	for _, r := range p.Records {
+		record := r.Encode()
+		body = append(body, record...)
+	}
+	size := uint32(len(body))
+	fullResponse := make([]byte, 4)
+	binary.BigEndian.PutUint32(fullResponse, size)
+	fullResponse = append(fullResponse, body...)
+	return fullResponse
+}
+
+func getProduceResponse(correlationID uint32, body *ProduceBody, path string) (responseEncoder, error) {
+	topicUUID, ok := metadata.ClusterState.TopicNameIndex[body.TopicName]
+	if !ok {
+		return nil, customerr.RaiseError(customerr.TopicNotFoundError)
+	}
+	topic := metadata.ClusterState.Topics[topicUUID]
+	var recordPartition *metadata.PartitionMetadata
+	for _, partition := range topic.Partitions {
+		if body.PartitionID == partition.ID {
+			recordPartition = &partition
+			break
+		}
+	}
+	if recordPartition == nil {
+		return nil, customerr.RaiseError(customerr.PartitionNotFoundError)
+	}
+	var records []metadata.Record
+	for _, recordRequest := range body.Records {
+		newRecord, err := recordRequest.Append(path, topicUUID.String(), body.TopicName, recordPartition.ID)
+		if err != nil {
+			return nil, customerr.RaiseError(customerr.SystemError, err.Error())
+		}
+		records = append(records, *newRecord)
+	}
+	response := &ProduceResponse{
+		CorrelationID:   correlationID,
+		TagBufferHeader: 0,
+		ProduceBody: ProduceBody{
+			TopicName:   body.TopicName,
+			PartitionID: body.PartitionID,
+			Records:     records,
+		},
+	}
+	fmt.Println(response)
+	return response, nil
 }
